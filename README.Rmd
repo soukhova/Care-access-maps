@@ -1,0 +1,12 @@
+---
+output:
+  github_document:
+    pandoc_args: --webtex
+always_allow_html: true
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+# Home for the care destination cumulative opportunity maps and dataset
+
+More to come
