@@ -1,5 +1,5 @@
 ---
-title: "15-minute cumulative opportunities maps"
+title: "Cumulative care destination mapping and DA selection"
 output: html_document
 ---
 
@@ -15,29 +15,70 @@ library(spdep)
 ```
 
 ```{r, eval=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
-load("data/access_15.rda")
+load("data/R_PARCELS_CENTS_2020.rda")
+
+load("data/ttm_care_TRANSIT_parcel1.rda")
+load("data/ttm_care_TRANSIT_parcel2.rda")
+load("data/ttm_care_TRANSIT_parcel3.rda")
+load("data/ttm_care_TRANSIT_parcel4.rda")
+
 load("data/HAM_census_21.rda")
 load("data/care_dest.rda")
 
-access_15_DA <- access_15 |> group_by(from_id) |> summarise(GeoUID = first(GeoUID),
-                                                            sum_copp_isc = sum(copp_isc),
-                                                            sum_V_isc = sum(V_isc)) |> 
-  group_by(GeoUID) |> summarise(med_copp_isc = median(sum_copp_isc, na.rm=T),
-                                V_isc = sum(sum_V_isc, na.rm=T)) |>
+PED_LANDUSE_List <- sp::over(as_Spatial(R_PARCELS_CENTS_2020),as_Spatial(HAM_census_21 |> dplyr::select("GeoUID")))
+R_PARCELS_CENTS_2020 <- cbind(R_PARCELS_CENTS_2020,PED_LANDUSE_List) |> mutate(ID = as.character(ID))
+
+access_15_parcel <- rbind(ttm_care_TRANSIT_parcel1 |> filter(travel_time_p50 <= 15),
+                          ttm_care_TRANSIT_parcel2 |> filter(travel_time_p50 <= 15),
+                          ttm_care_TRANSIT_parcel3 |> filter(travel_time_p50 <= 15),
+                          ttm_care_TRANSIT_parcel4 |> filter(travel_time_p50 <= 15))
+
+
+access_15_parcel <- access_15_parcel |> group_by(from_id) |> summarise(copp_isc = n())
+
+access_30_parcel <- rbind(ttm_care_TRANSIT_parcel1 |> filter(travel_time_p50 <= 30),
+                          ttm_care_TRANSIT_parcel2 |> filter(travel_time_p50 <= 30),
+                          ttm_care_TRANSIT_parcel3 |> filter(travel_time_p50 <= 30),
+                          ttm_care_TRANSIT_parcel4 |> filter(travel_time_p50 <= 30))
+
+
+access_30_parcel <- access_30_parcel |> group_by(from_id) |> summarise(copp_isc = n())
+
+rm(ttm_care_TRANSIT_parcel1,ttm_care_TRANSIT_parcel2,ttm_care_TRANSIT_parcel3,ttm_care_TRANSIT_parcel4)
+
+
+access_15_parcel_DA <- access_15_parcel|> 
+  left_join(R_PARCELS_CENTS_2020 |> st_drop_geometry() |> select(c("ID", "GeoUID")), by=c("from_id" = "ID")) |> 
+  group_by(GeoUID) |> summarise(med_copp_isc = median(copp_isc, na.rm=T)) |>
   left_join(HAM_census_21, by="GeoUID") |> st_as_sf() |> st_make_valid()
 
-save(access_15_DA, file="data/access_15_DA.rda")
+
+access_30_parcel_DA <- access_30_parcel|> 
+  left_join(R_PARCELS_CENTS_2020 |> st_drop_geometry() |> select(c("ID", "GeoUID")), by=c("from_id" = "ID")) |> 
+  group_by(GeoUID) |> summarise(med_copp_isc = median(copp_isc, na.rm=T)) |>
+  left_join(HAM_census_21, by="GeoUID") |> st_as_sf() |> st_make_valid()
+
+save(access_30_parcel_DA, file="data/access_30_parcel_DA.rda")
+save(access_15_parcel_DA, file="data/access_15_parcel_DA.rda")
 ```
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
-load("data/access_15_DA.rda")
-access_15_DA <- access_15_DA |> drop_na(GeoUID)
-access_15_DA <- access_15_DA |> rename("LICO-AT" = `v_CA21_1085: Prevalence of low income based on the Low-income cut-offs, after tax (LICO-AT) (%)`)
-access_15_DA <- st_transform(access_15_DA,crs = 4326)
+load(file="data/access_30_parcel_DA.rda")
+load(file="data/access_15_parcel_DA.rda")
+
+access_15_parcel_DA <- access_15_parcel_DA |> drop_na(GeoUID)
+access_15_parcel_DA <- access_15_parcel_DA |>
+  rename("LICO-AT" = `v_CA21_1085: Prevalence of low income based on the Low-income cut-offs, after tax (LICO-AT) (%)`)
+
+access_30_parcel_DA <- access_30_parcel_DA |> drop_na(GeoUID)
+access_30_parcel_DA <- access_30_parcel_DA |>
+  rename("LICO-AT" = `v_CA21_1085: Prevalence of low income based on the Low-income cut-offs, after tax (LICO-AT) (%)`)
 
 load("data/care_dest.rda")
 Community_Boundaries <- st_read("data/Boundaries/Community_Boundaries.shp", quiet = TRUE)
 Community_Boundaries <- st_transform(Community_Boundaries,crs = 4326)
+Ward_Boundaries <- st_read("data/Boundaries/Ward_Boundaries.shp", quiet = TRUE)
+Ward_Boundaries <- st_transform(Ward_Boundaries,crs = 4326)
 care_dest <- care_dest |> st_set_crs(st_crs(Community_Boundaries))
 ```
 
@@ -53,11 +94,10 @@ main_roads <- subset(street_net$edges)
 ```
 
 Let's describe the population and LICO-AT by DA:
-
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
 tmap_mode("view")
 
-p1 <- tm_shape(access_15_DA) +
+p1 <- tm_shape(access_15_parcel_DA) +
   tm_polygons("Population",
               palette = "Greens",
               style = "quantile", n=4, alpha=0.3,
@@ -69,7 +109,7 @@ p1 <- tm_shape(access_15_DA) +
   tm_shape(Community_Boundaries) + tm_borders("black") + 
 	tm_legend(outside=TRUE)
 
-p2 <-  tm_shape(access_15_DA) +
+p2 <-  tm_shape(access_15_parcel_DA) +
   tm_polygons("LICO-AT",
               palette = c("darkred", "orange", "yellow", "green"),
               alpha=0.3,
@@ -85,11 +125,11 @@ p2 <-  tm_shape(access_15_DA) +
 tmap_arrange(p1, p2)
 ```
 
-Median number of care destinations spatially accessible (by walk) within 15 mins from a parcel in each DA: 
+Median number of care destinations spatially accessible (by transit) within 15 mins from a parcel in each DA: 
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
 tmap_mode("view")
-tm_shape(access_15_DA) +
+tm_shape(access_15_parcel_DA) +
   tm_polygons("med_copp_isc",
               palette = c("darkred", "orange", "yellow", "green"),
               alpha=0.3,
@@ -103,44 +143,163 @@ tm_shape(access_15_DA) +
 	tm_legend(outside=TRUE)
 ```
 
-We will focus on the following DAs based on our discussion 10 June.
+We will focus on DAs that are in high-high and low-low spatially auto-correlated clusters as determined by local Moran's I. 
 
-- LOWER - HAMILTON CENTRAL:
-  - high (**35250422** (the highest value), 35250854, 35250431, 35250468) 
-  - low (**35250692** (the lowest value), 35250776, 35250775) (there's no good fourth DA to include around the original cluster as the nearby DA are quite a bit higher in value than the three identified. So we either stick with choosing 3 DAs for this one or pick an alternative cluster. For example, this could be made of **35250321**, 35250753, 35250756, 35250754,35250756,35250755)
-  
-- ON THE MOUNTAIN - HAMILTON CENTRAL:
-  - high (**35250969** (the highest value),35250542, 35250968, 35250541) 
-  - low (**35250135** (the lowest value), 35250661, 35251046, 35250134)
-
-How did we decide these DAs? We pick the highest and highest DA in LOWER-Hamilton Central and MOUNTAIN-Hamilton Central that contain care destinations. We then picked three more DAs with similar values neighbouring the selected DA. The following 3 plots showcase these selected DAs.
-
-Let's see the accessibility, population and LICO for just these DAs (NOTE: click on the DA to see the accessibility, population and LICO-AT values:
-
+*Spatial autocorrelation* refers to the extent to which a variable is correlated with itself through space. Think “everything is related to everything else, but near things are more related than distant things”  (Tobler 1970). Positive spatial autocorrelation indicates that observations are very similar in values (i.e., spatially clustered). Negative spatial autocorrelation occurs when observations with dissimilar values are closer together (i.e., spatially dispersed). Moran’s I statistic can be calculated to describe spatial autocorrelation.
+ 
+For the whole City of Hamilton, we see a positive spatial autocorrelation: 
 ```{r, message=FALSE, warning=FALSE, echo=FALSE}
-access_15_DA_selected <- access_15_DA |> 
-           filter(GeoUID == 35250422 | GeoUID == 35250854 | GeoUID == 35250431| GeoUID ==  35250468 |
-                    GeoUID == 35250692| GeoUID == 35250776| GeoUID == 35250775|
-                    GeoUID == 35250321|  GeoUID == 35250753| GeoUID == 35250756| GeoUID == 35250754| GeoUID == 35250756| GeoUID == 35250755|
-                    GeoUID == 35250969 |  GeoUID == 35250542| GeoUID == 35250968| GeoUID == 35250541|
-                    GeoUID == 35250135| GeoUID == 35250661| GeoUID == 35251046 | GeoUID == 35250134)
+sf_use_s2(FALSE)
+Ward_Boundaries_HAM <- Ward_Boundaries |> filter(WARD == 1 |WARD == 2 |WARD == 3 |WARD == 4 |WARD == 5 |
+                                                   WARD == 6 |WARD == 7 |WARD == 8 | WARD == 14)
+Community_Boundaries_HAM <- Community_Boundaries |> filter(COMMUNITY_ == "Hamilton") 
+access_15_parcel_DA_HAM <-  st_intersection(access_15_parcel_DA, Community_Boundaries_HAM) 
+access_30_parcel_DA_HAM <-  st_intersection(access_30_parcel_DA, Community_Boundaries_HAM) 
+care_dest_HAM <-  st_intersection(care_dest,Community_Boundaries_HAM) 
 
-care_dest_selected <-  st_intersection(care_dest,access_15_DA_selected ) 
+nb <- poly2nb(access_15_parcel_DA , queen = TRUE) # queen shares point or border
+nbw <- nb2listw(nb, style = "W")
+
+# Global Moran's I
+gmoran <- moran.test(access_15_parcel_DA$med_copp_isc, nbw, 
+                     alternative = "greater")
+gmoran
 ```
 
+Moran's I statistic is `r gmoran[["estimate"]][["Moran I statistic"]]`, very close to 1 (i.e., positive spatial autocorrelation), with a p-value of lower than 0.05 indicating significance. We can reject the null hypothesis and conclude there is evidence for positive spatial autocorrelation for the whole region. Positive spatial autocorrelation indicates that neighbours are very similar in values. This can be clusters of high values, and clusters of low values.
+
+But where are the clusters? IN the following we calculate the local Moran's I -- this involves tabulating the spatial moving average for each DA (the average value of all the neighbours around each DA, for each DA). We only include the Hamilton Central area as the rest if Hamilton is for the majority more rural (different) and we need not be concerned with edge effects (NOTE: I also did this analysis for the full City of Hamilton, and if significant, only Hamilton Central contains high-high clusters, rest are low-low).
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+nb <- poly2nb(access_15_parcel_DA_HAM, queen = TRUE) # queen shares point or border
+nbw <- nb2listw(nb, style = "W")
+lmoran <- localmoran(access_15_parcel_DA_HAM$med_copp_isc, nbw, alternative = "two.sided")
+access_15_parcel_DA_HAM$lmp <- lmoran[, 5] # p-values are in column 5
+mp <- moran.plot(as.vector(scale(access_15_parcel_DA_HAM$med_copp_isc)), nbw)
+```
+
+The closer the points are to the vertical line -- the more spatially autocorrelated the dataset is. In the following, we spatially visualise the statistically significant results where the top right quadrant of the plot above are (high-high) and the bottom left quadrant are (low-low) values. We also add in the ward boundaries within Hamilton Central: 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+access_15_parcel_DA_HAM$quadrant <- NA
+# high-high
+access_15_parcel_DA_HAM[(mp$x >= 0 & mp$wx >= 0) & (access_15_parcel_DA_HAM$lmp <= 0.05), "quadrant"]<- 1
+# low-low
+access_15_parcel_DA_HAM[(mp$x <= 0 & mp$wx <= 0) & (access_15_parcel_DA_HAM$lmp <= 0.05), "quadrant"]<- 2
+# high-low
+access_15_parcel_DA_HAM[(mp$x >= 0 & mp$wx <= 0) & (access_15_parcel_DA_HAM$lmp <= 0.05), "quadrant"]<- 3
+# low-high
+access_15_parcel_DA_HAM[(mp$x <= 0 & mp$wx >= 0) & (access_15_parcel_DA_HAM$lmp <= 0.05), "quadrant"]<- 4
+# non-significant
+access_15_parcel_DA_HAM[(access_15_parcel_DA_HAM$lmp > 0.05), "quadrant"] <- 5
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+tm_shape(access_15_parcel_DA_HAM) + tm_fill(col = "quadrant", title = "", breaks = c(1, 2, 3, 4, 5, 6), 
+                                            palette =  c("red", "blue", "lightpink", "skyblue2", "white"),
+                                            labels = c("High-High", "Low-Low", "High-Low",
+           "Low-High", "Non-significant")) +
+  tm_shape(Ward_Boundaries_HAM) + tm_borders(col = "grey20")+
+  tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
+  tm_layout(frame = FALSE,  title = "Clusters")  +
+  tm_layout(legend.outside = TRUE)
+```
+
+How do we interpret the Local Moran's I statistic? An advantage is it yields a statistical significance value. In the DAs that are shown in the map above, the are either high-high clusters or low-low clusters. A high-high cluster are DAs that have accessibility values that are high and are surrounded by neighbours that are relatively high in a statistically significant way; meaning, that if the values of Hamilton Central were shuffled and randomly assigned to DAs (i.e., a random 'null hypothesis), the chance of these clusters occurring are less than 0.05%. Same goes for the low-low clusters. Moran's I is a common statistic used in spatial analysis. 
+
+However - we have an issue. As can be seen, practically no DAs are high-high within the Mountain (the 4 most southern Wards). This is likely because a 15-minute travel window is quite narrow for transit mode. If 15 minutes is really important for care trips -- then our focus on 'high' accessibility DA should be restricted to the LOWER Hamilton-Central (and perhaps pick 8 DAs?). If we really want to include 'high' accessibility values on the MOUNTAIN (to show diversity of the city's urban environment), I suggest we do conduct this analysis assuming a larger travel window - such as 30 minutes. I know the literature suggests care trips are often shorter in length (~15 minutes) but some less frequent trips may be longer (i.e., further trips to hospitals, specific grocery stores) and the use of wider travel windows for transit has been done in the literature (in fact, my sense is 30 mins or longer is more common than 15), so this choice may not be necessarily critiqued. 
+
+So, assuming a 30 minute travel time window, we see the new low-low and high-high Local Moran's I Plot below:
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+nb <- poly2nb(access_30_parcel_DA_HAM, queen = TRUE) # queen shares point or border
+nbw <- nb2listw(nb, style = "W")
+lmoran <- localmoran(access_30_parcel_DA_HAM$med_copp_isc, nbw, alternative = "two.sided")
+access_30_parcel_DA_HAM$lmp <- lmoran[, 5] # p-values are in column 5
+mp <- moran.plot(as.vector(scale(access_30_parcel_DA_HAM$med_copp_isc)), nbw)
+
+access_30_parcel_DA_HAM$quadrant <- NA
+# high-high
+access_30_parcel_DA_HAM[(mp$x >= 0 & mp$wx >= 0) & (access_30_parcel_DA_HAM$lmp <= 0.05), "quadrant"]<- 1
+# low-low
+access_30_parcel_DA_HAM[(mp$x <= 0 & mp$wx <= 0) & (access_30_parcel_DA_HAM$lmp <= 0.05), "quadrant"]<- 2
+# high-low
+access_30_parcel_DA_HAM[(mp$x >= 0 & mp$wx <= 0) & (access_30_parcel_DA_HAM$lmp <= 0.05), "quadrant"]<- 3
+# low-high
+access_30_parcel_DA_HAM[(mp$x <= 0 & mp$wx >= 0) & (access_30_parcel_DA_HAM$lmp <= 0.05), "quadrant"]<- 4
+# non-significant
+access_30_parcel_DA_HAM[(access_30_parcel_DA_HAM$lmp > 0.05), "quadrant"] <- 5
+
+tm_shape(access_30_parcel_DA_HAM) + tm_fill(col = "quadrant", title = "", breaks = c(1, 2, 3, 4, 5, 6), 
+                                            palette =  c("red", "blue", "lightpink", "skyblue2", "white"),
+                                            labels = c("High-High", "Low-Low", "High-Low",
+           "Low-High", "Non-significant")) +
+  tm_shape(Ward_Boundaries_HAM) + tm_borders(col = "grey20")+
+  tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
+  tm_layout(frame = FALSE,  title = "Clusters")  +
+  tm_layout(legend.outside = TRUE)
+```
+
+Now let's plot the accessibility values for only DAs that have statistically significant quadrant 1 (high-high) and quadrant 2 (low-low) values and some DAs that can be potentially selected (black):
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+access_30_parcel_DA_HAM_selected <- access_30_parcel_DA_HAM |> 
+           filter(
+             #lower hamilton central - high values DONE (Q4)
+             GeoUID == 35250434 | GeoUID == 35250424 | GeoUID == 35250422| GeoUID ==  35250427 |
+            #lower hamilton central - low values DONE (Q1) 35250265
+                    GeoUID == 35250263|  GeoUID == 35250200| GeoUID == 35250857| GeoUID == 35250265 |
+              # mountain hamilton central - high values 
+                    GeoUID == 35250379 |  GeoUID == 35250442| GeoUID == 35250378| GeoUID == 35250443|
+               # mountain hamilton central - low values 
+                    GeoUID == 35250583| GeoUID == 35250992| GeoUID == 35250989 | GeoUID == 35250582
+            )
+
+care_dest_selected <-  st_intersection(care_dest,access_30_parcel_DA_HAM_selected) 
+```
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
 tmap_mode("view")
 
-tm_shape(access_15_DA_selected) +
+tm_shape(access_30_parcel_DA_HAM |> filter(quadrant == 1 | quadrant == 2)) +
+  tm_polygons("med_copp_isc",
+              palette = c("darkred", "orange", "yellow", "green"),
+              alpha=0.3,
+              breaks = c(2, 145, 257.8, 408.2, 807),
+              border.alpha = 0.5,
+              title = "Median # of care destinations (Quantiles)",
+              popup.vars = c("med_copp_isc", "LICO.AT","Population") ) +
+    tm_shape(Ward_Boundaries_HAM) + tm_borders(col = "grey20")+
+  tm_shape(access_30_parcel_DA_HAM_selected) + tm_borders(col="black", lwd=3)+
+  tm_shape(care_dest_HAM) +
+  tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"))+
+  tm_shape(Community_Boundaries_HAM) + tm_borders("grey") + 
+	tm_legend(outside=TRUE)
+```
+
+
+The black outlines are the potentially 'selected' DAs for audit and they are as follows:
+
+- LOWER - HAMILTON CENTRAL:
+  - high (**35250434** (the highest value), 35250424, 35250422, 35250427) + ~16 destinations
+  - low (**35250263** (the lowest value), 35250200, 35250857, 35250265) + ~9 destinations
+- ON THE MOUNTAIN - HAMILTON CENTRAL:
+  - high (**35250379** (the highest value),35250442, 35250378, 35250443) + ~7 destinations 
+  - low (**35250583** (the lowest value), 35250992, 35250989, 35250582) + ~18 destinations
+
+How were they selected? a high-high and low-low cluster for each the LOWER and MOUNTAIN were selected. A DA with the highest accessibility value out of the high-high DAs in LOWER Hamilton-Central was selected along with 3 neighbouring DAs that are also high-high. For low-low, in LOWER Hamilton-Central, the DA with the lowest accessibility value + contains care destinations was selected and 3 neighbouring DAs also with signifcant low-low spatial autocorrelation was selected. This process was repeated to select 4 more high-high DAs and 4 more low-low DAs on the MOUNTAIN-HAMILTON CENTRAL. Accessibility values in high-high are all Q4 (high values) and low-low values are all Q1 (low values).
+
+The following 3 plots showcase these selected DAs. Let's see the accessibility, population and LICO for just these DAs (NOTE: click on the DA to see the accessibility, population and LICO-AT values:
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+tmap_mode("view")
+tm_shape(access_30_parcel_DA_HAM_selected) +
   tm_polygons("med_copp_isc",
               palette = c("darkred", "orange", "yellow", "green"), alpha=0.3,border.alpha = 0.5,
-              breaks = c(0, 7, 14.5, 27, 107.5),
+              breaks = c(2, 145, 257.8, 408.2, 807),
               title = "Median # of care destinations (Quantiles)",
               legend.is.portrait = FALSE,
-              popup.vars = c("med_copp_isc", "LICO-AT","Population")) +
+              popup.vars = c("med_copp_isc", "LICO.AT","Population")) +
   tm_shape(care_dest_selected) +
   tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"))+
-  tm_shape(Community_Boundaries) + tm_borders("black") + 
+  tm_shape(Community_Boundaries_HAM) + tm_borders("black") + 
 	tm_legend(outside=TRUE)
 ```
 
@@ -148,7 +307,7 @@ OSM Street network with the posted vehicle speeds within 400m buffers around des
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
 sf_use_s2(TRUE)
-care_dest_selected_200m <- care_dest_selected |> st_buffer(dist = 200)
+#care_dest_selected_200m <- care_dest_selected |> st_buffer(dist = 200)
 care_dest_selected_400m <- care_dest_selected |> st_buffer(dist = 400)
 
 sf_use_s2(FALSE)
@@ -160,125 +319,42 @@ tmap_mode("view")
 tm_shape(main_roads_selected |> mutate(car_speed = round(car_speed))) +
   tm_lines(col = "car_speed", lwd=2, id = "car_speed", popup.vars = c("car_speed", "bicycle_lts", "street_class")) +
   tm_shape(care_dest_selected) +
-  tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"), alpha=0.8, legend.show = FALSE)
+  tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"), alpha=0.8, legend.show = FALSE)+
+  tm_shape(Community_Boundaries_HAM) + tm_borders("black") 
 ```
 *CAUTION WHEN USING SPEEDS FROM THIS MAP. I believe what's displayed is the whole segment average speed. I'm displaying the road network as used by {r5r} and I can only speculate that it averages the road segment speed to increase computational efficiency. However, in real life, the posted speed varies within parts of each segment. So it would be worth double-check speeds that do not end in 0s in the field / google street view. I'm not certain how to display the OSM road network as-is (unaveraged speeds), and it may not be worth my time figuring out at this point. But let me know!
 
 
-## AN ALTERNATIVE APPROACH - LISA methods
-
-What we're trying to do is determine high and low clusters - this is spatial autocorrelation! Spatial autocorrelation refers to the extent to which a variable is correlated with itself through space. Think “everything is related to everything else, but near things are more related than distant things”  (Tobler 1970). Positive spatial autocorrelation indicates that observations are very similar in values (i.e., spatially clustered). Negative spatial autocorrelation occurs when observations with dissimilar values are closer together (i.e., spatially dispersed). 
-
-Moran’s I statistic can be calculated to describe spatial autocorrelation.
- 
-For the whole City of Hamilton, we calculate a positive spatial autocorrelation: 
-```{r, message=FALSE, warning=FALSE, echo=FALSE}
-sf_use_s2(FALSE)
-Community_Boundaries_HAM <- Community_Boundaries |> filter(COMMUNITY_ == "Hamilton") 
-access_15_DA_HAM <-  st_intersection(access_15_DA,Community_Boundaries_HAM ) 
-care_dest_HAM <-  st_intersection(care_dest,Community_Boundaries_HAM ) 
-
-nb <- poly2nb(access_15_DA , queen = TRUE) # queen shares point or border
-nbw <- nb2listw(nb, style = "W")
-
-# Global Moran's I
-gmoran <- moran.test(access_15_DA$med_copp_isc, nbw, 
-                     alternative = "greater")
-gmoran
-```
-
-Moran's I statistic is `r gmoran[["estimate"]][["Moran I statistic"]]`, very close to 1 (i.e., positive spatial autocorrelation), with a p-value of lower than 0.05 indicating significance. We can reject the null hypothesis and conclude there is evidence for positive spatial autocorrelation for the whole region. Positive spatial autocorrelation indicates that neighbours are very similar in values. This can be clusters of high values, and clusters of low values.
-
-But where are the clusters? We can calculate the local Moran's I -- this involves tabulating the spatial moving average for each DA (the average value of all the neighbours around each DA, for each DA). Let's only focus on the Hamilton Central area (I did this analysis for the rest of Hamilton, and it only has concentrations of low-low).
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-nb <- poly2nb(access_15_DA_HAM , queen = TRUE) # queen shares point or border
-nbw <- nb2listw(nb, style = "W")
-lmoran <- localmoran(access_15_DA_HAM$med_copp_isc, nbw, alternative = "two.sided")
-access_15_DA_HAM$lmp <- lmoran[, 5] # p-values are in column 5
-mp <- moran.plot(as.vector(scale(access_15_DA_HAM$med_copp_isc)), nbw)
-```
-The closer the points are to the vertical line -- the more spatially autocorrelated the dataset is. Let's spatially visualise the statistically significant results where the top right quadrant of the plot above is (high-high) and the bottom left quadrant is (low-low) values: 
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-access_15_DA_HAM$quadrant <- NA
-# high-high
-access_15_DA_HAM[(mp$x >= 0 & mp$wx >= 0) & (access_15_DA_HAM$lmp <= 0.05), "quadrant"]<- 1
-# low-low
-access_15_DA_HAM[(mp$x <= 0 & mp$wx <= 0) & (access_15_DA_HAM$lmp <= 0.05), "quadrant"]<- 2
-# high-low
-access_15_DA_HAM[(mp$x >= 0 & mp$wx <= 0) & (access_15_DA_HAM$lmp <= 0.05), "quadrant"]<- 3
-# low-high
-access_15_DA_HAM[(mp$x <= 0 & mp$wx >= 0) & (access_15_DA_HAM$lmp <= 0.05), "quadrant"]<- 4
-# non-significant
-access_15_DA_HAM[(access_15_DA_HAM$lmp > 0.05), "quadrant"] <- 5
-```
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
-tm_shape(access_15_DA_HAM) + tm_fill(col = "quadrant", title = "",
-breaks = c(1, 2, 3, 4, 5, 6),
-palette =  c("red", "blue", "lightpink", "skyblue2", "white"),
-labels = c("High-High", "Low-Low", "High-Low",
-           "Low-High", "Non-significant")) +
-tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
-tm_layout(frame = FALSE,  title = "Clusters")  +
-tm_layout(legend.outside = TRUE)
-```
-
-Now let's plot the accessibility values for only DAs that have statistically signficant quadrant 1 (high-high) and quadrant 2 (low-low) values:
-```{r, echo=FALSE, warning=FALSE, message=FALSE}
-tmap_mode("view")
-
-tm_shape(access_15_DA_HAM|> filter(quadrant == 1 | quadrant == 2)) +
-  tm_polygons("med_copp_isc",
-              palette = c("darkred", "orange", "yellow", "green"),
-              alpha=0.3,
-              breaks = c(0, 12, 19, 33.5, 107.5),
-              border.alpha = 0.5,
-              title = "Median # of care destinations (Quantiles)",
-              popup.vars = c("med_copp_isc", "LICO.AT","Population") ) +
-  tm_shape(access_15_DA_selected) + tm_borders(col="black", lwd=3)+
-  tm_shape(care_dest_HAM) +
-  tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"))+
-  tm_shape(Community_Boundaries_HAM) + tm_borders("grey") + 
-	tm_legend(outside=TRUE)
-```
-
-
-The black outlines are the 'selected' clusters from our conversation June 10, with an alternative low option in LOWER - HAMILTON CENTRAL. 
-
-It can be seen that only the selected LOW-HAMILTON CENTRAL higher cluster and the MOUNTAIN-HAMILTON CENTRAL lower cluster overlap the Local Moran's I clusters.
-
-How do we interpret the Local Moran's I clusters? An advantage is it yields a statistical significance value. In the DAs that are shown in the map above, the are either high-high clusters or low-low clusters. A high-high cluster are DAs that have accessibility values that are high and are surrounded by neighbours that are relatively high in a statistically significant way; meaning, that if the values of Hamilton Central were shuffled and randomly assigned to DAs (i.e., a random 'null
- hypothesis), the chance of these clusters occurring are less than 0.05%. Same goes for the low-low clusters. Moran's I is a common statistic used in spatial analysis. 
- 
-The issue here is -- there is no high-high cluster in MOUNTAIN-HAMILTON CENTRAL. In fact, there is a high-high cluster in LOWER - HAMILTON CENTRAL -- no where else in the City of Hamilton. 
+## An alternative spatial autocorrelation measure - hot-cold spots: G* statistic
 
 We can also try another "Local Statistics of Spatial Association" (LISA) approach to detect clusters -- the $G^*$ statistic (Getis and Ord, 1992). In this measure, the spatial weights are not row-standardized and are binary. In the Local Moran's I we calculated the weighted spatial moving average. In this measure, we instead calculate the total of the variable in the neighborhood (i.e., being the value of the DA and the value of all the DAs touching a DA).
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
-nb <- poly2nb(access_15_DA_HAM , queen = TRUE) # queen shares point or border
+nb <- poly2nb(access_30_parcel_DA_HAM , queen = TRUE) # queen shares point or border
 nbw <- nb2listw(include.self(nb), style = "B") #include self and the style must be binary as we do not calculate the spatial moving average for the neighborhood, but the total of the variable in the neighborhood. 
-lG <- localG(access_15_DA_HAM$med_copp_isc, nbw, alternative = "two.sided")
+lG <- localG(access_30_parcel_DA_HAM$med_copp_isc, nbw, alternative = "two.sided")
 
 # adding p-values
 lG <- as.numeric(lG)
 lG <- data.frame(Gstar = lG, p.val = 2 * pnorm(abs(lG), lower.tail = FALSE))
 
-access_15_DA_HAM <- cbind(access_15_DA_HAM,lG)
-access_15_DA_HAM <- access_15_DA_HAM |>
+access_30_parcel_DA_HAM <- cbind(access_30_parcel_DA_HAM,lG)
+access_30_parcel_DA_HAM <- access_30_parcel_DA_HAM |>
   mutate(Type = case_when(Gstar < 0 & p.val <= 0.05 ~ "Low Concentration",
                           Gstar > 0 & p.val <= 0.05 ~ "High Concentration", 
                           TRUE ~ "Not Signicant"))
 ```
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
-tm_shape(access_15_DA_HAM) + tm_fill(col = "Type", title = "",
-palette =  c("red", "blue", "white")) +
+tm_shape(access_30_parcel_DA_HAM) + tm_fill(col = "Type", title = "", palette =  c("red", "blue", "white")) +
+tm_shape(Ward_Boundaries_HAM) + tm_borders(col = "grey20")+
 tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
 tm_layout(frame = FALSE,  title = "Clusters")  +
 tm_layout(legend.outside = TRUE)
 ```
 
-We see from the map above, the result is quite similar as the Local Moran's I map. Why? I think because positive spatial autocorrelation is quite apparent and what we define as a neighbour is quite similar (i.e., a neighbour for each DAs are the DAs that border it). Is this a good way of defining a neighbourhood? Not sure. We don't have information on what is a good distance away from a DA to be considered within the same neighbourhood (i.e., no surveys of people's perceptions). So once again, stats are complex and shed a some light but leave other things unknown. Thought it was worthwhile adding in these methods as food for thought.
+We see from the map above, the result is quite similar as the Local Moran's I map. Why? I think because positive spatial autocorrelation is quite apparent and what we define as a neighbour is quite similar (i.e., a neighbour for each DAs are the DAs that border it). Is this a good way of defining a neighbourhood? Not sure. We don't have information on what is a good distance away from a DA to be considered within the same neighbourhood (i.e., no surveys of people's perceptions). So once again, stats are complex and shed a some light but leave other things unknown.
+
+
+
 

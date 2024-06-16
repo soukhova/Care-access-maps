@@ -1,7 +1,15 @@
 /data/access_15_DA.rda
 /data/access_15.rda
 /data/care_dest.rda
+/data/ttm_care_TRANSIT_parcel1.rda
+/data/ttm_care_TRANSIT_parcel2.rda
+/data/ttm_care_TRANSIT_parcel3.rda
+/data/ttm_care_TRANSIT_parcel4.rda
+
 /data/Routing/
+/data/R_PARCELS_CENTS_2020.rda
+/data/access_30_parcel_DA.rda
+/data/access_15_parcel_DA.rda
 /.Rproj.user
 /.Rproj.user
 /.Rproj.user/shared
