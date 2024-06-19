@@ -244,13 +244,13 @@ Now let's plot the accessibility values for only DAs that have statistically sig
 access_30_parcel_DA_HAM_selected <- access_30_parcel_DA_HAM |> 
            filter(
              #lower hamilton central - high values DONE (Q4)
-             GeoUID == 35250434 | GeoUID == 35250424 | GeoUID == 35250422| GeoUID ==  35250427 |
+             GeoUID == 35250434 | GeoUID == 35250424 | GeoUID == 35250422| GeoUID ==  35250427 | GeoUID == 35250854 |
             #lower hamilton central - low values DONE (Q1) 35250265
-                    GeoUID == 35250263|  GeoUID == 35250200| GeoUID == 35250857| GeoUID == 35250265 |
+                    GeoUID == 35251044|  GeoUID == 35250238| GeoUID == 35250248| GeoUID == 35250320 | GeoUID == 35250319 | GeoUID == 35250281 |
               # mountain hamilton central - high values 
-                    GeoUID == 35250379 |  GeoUID == 35250442| GeoUID == 35250378| GeoUID == 35250443|
+                    GeoUID == 35250379 |  GeoUID == 35250442| GeoUID == 35250378| GeoUID == 35250443| GeoUID == 35250377 | GeoUID == 35250376 |
                # mountain hamilton central - low values 
-                    GeoUID == 35250583| GeoUID == 35250992| GeoUID == 35250989 | GeoUID == 35250582
+                    GeoUID == 35250266| GeoUID == 35250265| GeoUID == 35250264 | GeoUID == 35250263 | GeoUID == 35250857 | GeoUID == 35250200
             )
 
 care_dest_selected <-  st_intersection(care_dest,access_30_parcel_DA_HAM_selected) 
@@ -269,7 +269,7 @@ tm_shape(access_30_parcel_DA_HAM |> filter(quadrant == 1 | quadrant == 2)) +
     tm_shape(Ward_Boundaries_HAM) + tm_borders(col = "grey20")+
   tm_shape(access_30_parcel_DA_HAM_selected) + tm_borders(col="black", lwd=3)+
   tm_shape(care_dest_HAM) +
-  tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"))+
+  tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"), popup.vars = c("Care_Category", "Care_Category_Specific", "Name", "F_Address"))+
   tm_shape(Community_Boundaries_HAM) + tm_borders("grey") + 
 	tm_legend(outside=TRUE)
 ```
@@ -278,11 +278,11 @@ tm_shape(access_30_parcel_DA_HAM |> filter(quadrant == 1 | quadrant == 2)) +
 The black outlines are the potentially 'selected' DAs for audit and they are as follows:
 
 - LOWER - HAMILTON CENTRAL:
-  - high (**35250434** (the highest value), 35250424, 35250422, 35250427) + ~16 destinations
-  - low (**35250263** (the lowest value), 35250200, 35250857, 35250265) + ~9 destinations
+  - high (**35250434** (the highest value), 35250424, 35250422, 35250427, *35250854*) + ~X destinations
+  - low (**35251044** (the lowest value), 35250238, 35250248, 35250320,35250319,35250281 ) + ~X destinations
 - ON THE MOUNTAIN - HAMILTON CENTRAL:
-  - high (**35250379** (the highest value),35250442, 35250378, 35250443) + ~7 destinations 
-  - low (**35250583** (the lowest value), 35250992, 35250989, 35250582) + ~18 destinations
+  - high (**35250379** (the highest value),35250442, 35250378, 35250443, *35250377*, *35250376*) + ~X destinations 
+  - low (**35250266** (the lowest value), 35250265, 35250264, 35250263, 35250857, 35250200) + ~X destinations
 
 How were they selected? a high-high and low-low cluster for each the LOWER and MOUNTAIN were selected. A DA with the highest accessibility value out of the high-high DAs in LOWER Hamilton-Central was selected along with 3 neighbouring DAs that are also high-high. For low-low, in LOWER Hamilton-Central, the DA with the lowest accessibility value + contains care destinations was selected and 3 neighbouring DAs also with signifcant low-low spatial autocorrelation was selected. This process was repeated to select 4 more high-high DAs and 4 more low-low DAs on the MOUNTAIN-HAMILTON CENTRAL. Accessibility values in high-high are all Q4 (high values) and low-low values are all Q1 (low values).
 
@@ -298,7 +298,8 @@ tm_shape(access_30_parcel_DA_HAM_selected) +
               legend.is.portrait = FALSE,
               popup.vars = c("med_copp_isc", "LICO.AT","Population")) +
   tm_shape(care_dest_selected) +
-  tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"))+
+  tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"), 
+          popup.vars = c("Care_Category", "Care_Category_Specific", "Name", "F_Address"))+
   tm_shape(Community_Boundaries_HAM) + tm_borders("black") + 
 	tm_legend(outside=TRUE)
 ```
