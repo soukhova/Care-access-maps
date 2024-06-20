@@ -75,10 +75,9 @@ access_30_parcel_DA <- access_30_parcel_DA |>
   rename("LICO-AT" = `v_CA21_1085: Prevalence of low income based on the Low-income cut-offs, after tax (LICO-AT) (%)`)
 
 load("data/care_dest.rda")
-Community_Boundaries <- st_read("data/Boundaries/Community_Boundaries.shp", quiet = TRUE)
-Community_Boundaries <- st_transform(Community_Boundaries,crs = 4326)
-Ward_Boundaries <- st_read("data/Boundaries/Ward_Boundaries.shp", quiet = TRUE)
-Ward_Boundaries <- st_transform(Ward_Boundaries,crs = 4326)
+Community_Boundaries <- st_read("data/Boundaries/Community_Boundaries.shp", quiet = TRUE) |> st_transform(Community_Boundaries,crs = 4326)
+Escpartment_Boundary <- st_read("data/Boundaries/Escarpment.shp", quiet = TRUE) |> st_transform(Escpartment_Boundary, crs = 4326) |> st_cast("LINESTRING")
+Escpartment_Boundary <- Escpartment_Boundary |> st_intersection(Community_Boundaries |> filter(COMMUNITY_ == "Hamilton")) 
 care_dest <- care_dest |> st_set_crs(st_crs(Community_Boundaries))
 ```
 
@@ -150,8 +149,6 @@ We will focus on DAs that are in high-high and low-low spatially auto-correlated
 For the whole City of Hamilton, we see a positive spatial autocorrelation: 
 ```{r, message=FALSE, warning=FALSE, echo=FALSE}
 sf_use_s2(FALSE)
-Ward_Boundaries_HAM <- Ward_Boundaries |> filter(WARD == 1 |WARD == 2 |WARD == 3 |WARD == 4 |WARD == 5 |
-                                                   WARD == 6 |WARD == 7 |WARD == 8 | WARD == 14)
 Community_Boundaries_HAM <- Community_Boundaries |> filter(COMMUNITY_ == "Hamilton") 
 access_15_parcel_DA_HAM <-  st_intersection(access_15_parcel_DA, Community_Boundaries_HAM) 
 access_30_parcel_DA_HAM <-  st_intersection(access_30_parcel_DA, Community_Boundaries_HAM) 
@@ -178,7 +175,7 @@ access_15_parcel_DA_HAM$lmp <- lmoran[, 5] # p-values are in column 5
 mp <- moran.plot(as.vector(scale(access_15_parcel_DA_HAM$med_copp_isc)), nbw)
 ```
 
-The closer the points are to the vertical line -- the more spatially autocorrelated the dataset is. In the following, we spatially visualise the statistically significant results where the top right quadrant of the plot above are (high-high) and the bottom left quadrant are (low-low) values. We also add in the ward boundaries within Hamilton Central: 
+The closer the points are to the vertical line -- the more spatially autocorrelated the dataset is. In the following, we spatially visualise the statistically significant results where the top right quadrant of the plot above are (high-high) and the bottom left quadrant are (low-low) values. We also add in the Escarpment boundary within Hamilton Central: 
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 access_15_parcel_DA_HAM$quadrant <- NA
@@ -199,7 +196,8 @@ tm_shape(access_15_parcel_DA_HAM) + tm_fill(col = "quadrant", title = "", breaks
                                             palette =  c("red", "blue", "lightpink", "skyblue2", "white"),
                                             labels = c("High-High", "Low-Low", "High-Low",
            "Low-High", "Non-significant")) +
-  tm_shape(Ward_Boundaries_HAM) + tm_borders(col = "grey20")+
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
   tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
   tm_layout(frame = FALSE,  title = "Clusters")  +
   tm_layout(legend.outside = TRUE)
@@ -233,7 +231,8 @@ tm_shape(access_30_parcel_DA_HAM) + tm_fill(col = "quadrant", title = "", breaks
                                             palette =  c("red", "blue", "lightpink", "skyblue2", "white"),
                                             labels = c("High-High", "Low-Low", "High-Low",
            "Low-High", "Non-significant")) +
-  tm_shape(Ward_Boundaries_HAM) + tm_borders(col = "grey20")+
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
   tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
   tm_layout(frame = FALSE,  title = "Clusters")  +
   tm_layout(legend.outside = TRUE)
@@ -266,7 +265,8 @@ tm_shape(access_30_parcel_DA_HAM |> filter(quadrant == 1 | quadrant == 2)) +
               border.alpha = 0.5,
               title = "Median # of care destinations (Quantiles)",
               popup.vars = c("med_copp_isc", "LICO.AT","Population") ) +
-    tm_shape(Ward_Boundaries_HAM) + tm_borders(col = "grey20")+
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
   tm_shape(access_30_parcel_DA_HAM_selected) + tm_borders(col="black", lwd=3)+
   tm_shape(care_dest_HAM) +
   tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"), popup.vars = c("Care_Category", "Care_Category_Specific", "Name", "F_Address"))+
@@ -300,7 +300,8 @@ tm_shape(access_30_parcel_DA_HAM_selected) +
   tm_shape(care_dest_selected) +
   tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"), 
           popup.vars = c("Care_Category", "Care_Category_Specific", "Name", "F_Address"))+
-  tm_shape(Community_Boundaries_HAM) + tm_borders("black") + 
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
 	tm_legend(outside=TRUE)
 ```
 
@@ -321,7 +322,8 @@ tm_shape(main_roads_selected |> mutate(car_speed = round(car_speed))) +
   tm_lines(col = "car_speed", lwd=2, id = "car_speed", popup.vars = c("car_speed", "bicycle_lts", "street_class")) +
   tm_shape(care_dest_selected) +
   tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"), alpha=0.8, legend.show = FALSE)+
-  tm_shape(Community_Boundaries_HAM) + tm_borders("black") 
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")
 ```
 *CAUTION WHEN USING SPEEDS FROM THIS MAP. I believe what's displayed is the whole segment average speed. I'm displaying the road network as used by {r5r} and I can only speculate that it averages the road segment speed to increase computational efficiency. However, in real life, the posted speed varies within parts of each segment. So it would be worth double-check speeds that do not end in 0s in the field / google street view. I'm not certain how to display the OSM road network as-is (unaveraged speeds), and it may not be worth my time figuring out at this point. But let me know!
 
@@ -348,7 +350,8 @@ access_30_parcel_DA_HAM <- access_30_parcel_DA_HAM |>
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 tm_shape(access_30_parcel_DA_HAM) + tm_fill(col = "Type", title = "", palette =  c("red", "blue", "white")) +
-tm_shape(Ward_Boundaries_HAM) + tm_borders(col = "grey20")+
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
 tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
 tm_layout(frame = FALSE,  title = "Clusters")  +
 tm_layout(legend.outside = TRUE)
