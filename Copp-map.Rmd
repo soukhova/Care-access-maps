@@ -196,7 +196,7 @@ tm_shape(access_15_parcel_DA_HAM) + tm_fill(col = "quadrant", title = "", breaks
                                             palette =  c("red", "blue", "lightpink", "skyblue2", "white"),
                                             labels = c("High-High", "Low-Low", "High-Low",
            "Low-High", "Non-significant")) +
-  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "forestgreen", lwd=2)+
   tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
   tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
   tm_layout(frame = FALSE,  title = "Clusters")  +
@@ -231,7 +231,7 @@ tm_shape(access_30_parcel_DA_HAM) + tm_fill(col = "quadrant", title = "", breaks
                                             palette =  c("red", "blue", "lightpink", "skyblue2", "white"),
                                             labels = c("High-High", "Low-Low", "High-Low",
            "Low-High", "Non-significant")) +
-  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "forestgreen", lwd=2)+
   tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
   tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
   tm_layout(frame = FALSE,  title = "Clusters")  +
@@ -249,7 +249,10 @@ access_30_parcel_DA_HAM_selected <- access_30_parcel_DA_HAM |>
               # mountain hamilton central - high values 
                     GeoUID == 35250379 |  GeoUID == 35250442| GeoUID == 35250378| GeoUID == 35250443| GeoUID == 35250377 | GeoUID == 35250376 |
                # mountain hamilton central - low values 
-                    GeoUID == 35250266| GeoUID == 35250265| GeoUID == 35250264 | GeoUID == 35250263 | GeoUID == 35250857 | GeoUID == 35250200
+                    GeoUID == 35250266| GeoUID == 35250265| GeoUID == 35250264 | GeoUID == 35250263 | GeoUID == 35250857 | GeoUID == 35250200 | 
+              
+               # POTENTIAL mountain hamilton central - low values 
+                    GeoUID == 35250583| GeoUID == 35250992| GeoUID == 35250989 | GeoUID == 35250582 | GeoUID == 35250581 | GeoUID == 35250578
             )
 
 care_dest_selected <-  st_intersection(care_dest,access_30_parcel_DA_HAM_selected) 
@@ -265,7 +268,7 @@ tm_shape(access_30_parcel_DA_HAM |> filter(quadrant == 1 | quadrant == 2)) +
               border.alpha = 0.5,
               title = "Median # of care destinations (Quantiles)",
               popup.vars = c("med_copp_isc", "LICO.AT","Population") ) +
-  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "forestgreen", lwd=2)+
   tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
   tm_shape(access_30_parcel_DA_HAM_selected) + tm_borders(col="black", lwd=3)+
   tm_shape(care_dest_HAM) +
@@ -280,9 +283,12 @@ The black outlines are the potentially 'selected' DAs for audit and they are as 
 - LOWER - HAMILTON CENTRAL:
   - high (**35250434** (the highest value), 35250424, 35250422, 35250427, *35250854*) + ~X destinations
   - low (**35251044** (the lowest value), 35250238, 35250248, 35250320,35250319,35250281 ) + ~X destinations
+  OOOOORR
+  - low (**35250266** (the lowest value), 35250265, 35250264, 35250263, 35250857, 35250200) + ~X destinations
+  
 - ON THE MOUNTAIN - HAMILTON CENTRAL:
   - high (**35250379** (the highest value),35250442, 35250378, 35250443, *35250377*, *35250376*) + ~X destinations 
-  - low (**35250266** (the lowest value), 35250265, 35250264, 35250263, 35250857, 35250200) + ~X destinations
+  - POTENTIAL SELECTION low ( **35250583** (the lowest value), 35250992, 35250989, 35250582,  35250581, 35250578) + ~X destinations
 
 How were they selected? a high-high and low-low cluster for each the LOWER and MOUNTAIN were selected. A DA with the highest accessibility value out of the high-high DAs in LOWER Hamilton-Central was selected along with 3 neighbouring DAs that are also high-high. For low-low, in LOWER Hamilton-Central, the DA with the lowest accessibility value + contains care destinations was selected and 3 neighbouring DAs also with signifcant low-low spatial autocorrelation was selected. This process was repeated to select 4 more high-high DAs and 4 more low-low DAs on the MOUNTAIN-HAMILTON CENTRAL. Accessibility values in high-high are all Q4 (high values) and low-low values are all Q1 (low values).
 
@@ -300,7 +306,7 @@ tm_shape(access_30_parcel_DA_HAM_selected) +
   tm_shape(care_dest_selected) +
   tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"), 
           popup.vars = c("Care_Category", "Care_Category_Specific", "Name", "F_Address"))+
-  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "forestgreen", lwd=2)+
   tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
 	tm_legend(outside=TRUE)
 ```
@@ -322,7 +328,7 @@ tm_shape(main_roads_selected |> mutate(car_speed = round(car_speed))) +
   tm_lines(col = "car_speed", lwd=2, id = "car_speed", popup.vars = c("car_speed", "bicycle_lts", "street_class")) +
   tm_shape(care_dest_selected) +
   tm_dots(col = "Care_Category", palette = c("brown","blue","purple","green","cyan"), alpha=0.8, legend.show = FALSE)+
-  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "forestgreen", lwd=2)+
   tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")
 ```
 *CAUTION WHEN USING SPEEDS FROM THIS MAP. I believe what's displayed is the whole segment average speed. I'm displaying the road network as used by {r5r} and I can only speculate that it averages the road segment speed to increase computational efficiency. However, in real life, the posted speed varies within parts of each segment. So it would be worth double-check speeds that do not end in 0s in the field / google street view. I'm not certain how to display the OSM road network as-is (unaveraged speeds), and it may not be worth my time figuring out at this point. But let me know!
@@ -350,7 +356,7 @@ access_30_parcel_DA_HAM <- access_30_parcel_DA_HAM |>
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 tm_shape(access_30_parcel_DA_HAM) + tm_fill(col = "Type", title = "", palette =  c("red", "blue", "white")) +
-  tm_shape(Escpartment_Boundary) + tm_lines(col = "grey10", lwd=2)+
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "forestgreen", lwd=2)+
   tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
 tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
 tm_layout(frame = FALSE,  title = "Clusters")  +
