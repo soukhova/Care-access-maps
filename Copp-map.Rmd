@@ -12,6 +12,7 @@ library(tidyr)
 library(r5r)
 library(data.table)
 library(spdep)
+library(ggplot2)
 ```
 
 ```{r, eval=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
@@ -65,6 +66,7 @@ save(access_15_parcel_DA, file="data/access_15_parcel_DA.rda")
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
 load(file="data/access_30_parcel_DA.rda")
 load(file="data/access_15_parcel_DA.rda")
+load(file = "data/HAM_census_21.rda")
 
 access_15_parcel_DA <- access_15_parcel_DA |> drop_na(GeoUID)
 access_15_parcel_DA <- access_15_parcel_DA |>
@@ -76,10 +78,55 @@ access_30_parcel_DA <- access_30_parcel_DA |>
 
 load("data/care_dest.rda")
 Community_Boundaries <- st_read("data/Boundaries/Community_Boundaries.shp", quiet = TRUE) |> st_transform(Community_Boundaries,crs = 4326)
+Community_Boundaries <- Community_Boundaries |> mutate(COMMUNITY_ = ifelse(COMMUNITY_ == "Hamilton", "Hamilton Centre", COMMUNITY_))
 Escpartment_Boundary <- st_read("data/Boundaries/Escarpment.shp", quiet = TRUE) |> st_transform(Escpartment_Boundary, crs = 4326) |> st_cast("LINESTRING")
-Escpartment_Boundary <- Escpartment_Boundary |> st_intersection(Community_Boundaries |> filter(COMMUNITY_ == "Hamilton")) 
+Escpartment_Boundary_HAM <- Escpartment_Boundary |> st_intersection(Community_Boundaries |> filter(COMMUNITY_ == "Hamilton Centre")) 
 care_dest <- care_dest |> st_set_crs(st_crs(Community_Boundaries))
 ```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+hydro_p_LakeOntario <- st_read(paste0(here::here(),"/data/Boundaries/hydro_p_LakeOntario.shp")) |> st_transform(crs=4326)
+ham_bay <- st_read(paste0(here::here(),"/data/Boundaries/Waterbodies.shp")) |> st_transform(crs=4326) |> filter(FEATURE_TY == "Lake")
+```
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, eval=FALSE}
+#plotting map to export as a figure for papa
+#tmap_mode("plot")
+
+p_pop <- 
+  tm_shape(ham_bay, bbox=Community_Boundaries) + tm_polygons(col="skyblue", border.alpha = 0) +
+  tm_shape(hydro_p_LakeOntario, bbox=Community_Boundaries) + tm_polygons(col="skyblue", border.alpha = 0)+
+  tm_shape(HAM_census_21) +
+  tm_polygons("Population",
+              palette = "Greens",
+              style = "quantile", n=4, alpha=0.6,
+              border.alpha = 0.1, lwd=0.01,
+              title = "Population (Quantiles)",
+              legend.is.portrait = TRUE) +
+  tm_shape(Community_Boundaries, is.master = TRUE) + 
+  tm_polygons("COMMUNITY_", bord.col="black", alpha = 0, border.alpha = 1, lwd=2, legend.show=FALSE) + 
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "orange", lty = "dashed", lwd=2, legend.show=TRUE)+
+  tm_shape(Community_Boundaries) + tm_text("COMMUNITY_", size=1.1) + 
+  tm_compass(position = c("left","top"))+
+  tm_scale_bar(position = c("left","bottom"))+
+  tm_add_legend(type = c("line"), labels = c("Community boundaries", "Escarpment"), col = c("black", "orange"), lwd = c(2, 2), lty = c("solid", "dashed"))+
+  tm_layout(bg.color = "grey", legend.position = c("right","top"), legend.text.size = 1)
+
+tmap_save(p_pop, "figures/p_pop.png")
+```
+```{r, echo=FALSE, warning=FALSE, message=FALSE, eval=FALSE}
+#plotting map to export as a figure for paper
+ttm_care_TRANSIT_all <- rbind(ttm_care_TRANSIT_parcel1, ttm_care_TRANSIT_parcel2,ttm_care_TRANSIT_parcel3,ttm_care_TRANSIT_parcel4)
+rm(ttm_care_TRANSIT_parcel1, ttm_care_TRANSIT_parcel2,ttm_care_TRANSIT_parcel3,ttm_care_TRANSIT_parcel4)
+
+ggplot(ttm_care_TRANSIT_all, aes(x=travel_time_p50)) + 
+         geom_density(bw=0.5) #not needed I think!
+
+ttm_care_TRANSIT_all |> group_by(from_id) |> summarise(mean_tt = mean(travel_time_p50))  |> summary()
+```
+
 
 ```{r, message=FALSE, warning=FALSE, echo=FALSE}
 # download.file(url = "https://transitfeeds.com/p/hamilton-street-railway/31/latest/download", destfile = file.path("data/Routing", "HSR-GTFS.zip"), mode = "wb") #downloading HSR latest GTFS file (15 August 2023)
@@ -149,7 +196,7 @@ We will focus on DAs that are in high-high and low-low spatially auto-correlated
 For the whole City of Hamilton, we see a positive spatial autocorrelation: 
 ```{r, message=FALSE, warning=FALSE, echo=FALSE}
 sf_use_s2(FALSE)
-Community_Boundaries_HAM <- Community_Boundaries |> filter(COMMUNITY_ == "Hamilton") 
+Community_Boundaries_HAM <- Community_Boundaries |> filter(COMMUNITY_ == "Hamilton Centre") 
 access_15_parcel_DA_HAM <-  st_intersection(access_15_parcel_DA, Community_Boundaries_HAM) 
 access_30_parcel_DA_HAM <-  st_intersection(access_30_parcel_DA, Community_Boundaries_HAM) 
 care_dest_HAM <-  st_intersection(care_dest,Community_Boundaries_HAM) 
@@ -311,6 +358,89 @@ tm_shape(access_30_parcel_DA_HAM_selected) +
 	tm_legend(outside=TRUE)
 ```
 
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, eval=FALSE}
+tmap_mode("plot")
+care_dest_HAM_renamed <- care_dest_HAM |> 
+  mutate(Care_Category = case_when(Care_Category == "Child_Centric" ~
+                                                                   "Child-centric",
+                                                                   Care_Category == "Elder_Centric" ~
+                                                                   "Elder-centric",
+                                                                   Care_Category == "Grocery_Centric"~
+                                                                   "Grocery-centric",
+                                                                   Care_Category == "Health_Centric"~
+                                                                   "Health-centric",
+                                                                   Care_Category == "Errand_Centric"~
+                                                                   "Errand-centric")) |>
+  filter(Care_Category != "Elder-centric")
+
+p_access_30_selected <-
+  tm_shape(ham_bay, bbox=Community_Boundaries) + tm_polygons(col="skyblue", border.alpha = 0) +
+  tm_shape(hydro_p_LakeOntario, bbox=Community_Boundaries) + tm_polygons(col="skyblue", border.alpha = 0)+
+  tm_shape(access_30_parcel_DA) +
+  tm_polygons("med_copp_isc",
+              palette = c("darkred", "orange", "yellow", "green"),
+              alpha=0.6,
+              breaks = c(2, 145, 257.8, 408.2, 807),
+              border.alpha = 0.2,
+              lwd=0.5,
+              title = "Median accessibility \n(Hamilton Centre quantiles)") +
+  tm_shape(Community_Boundaries_HAM, is.master = TRUE) + tm_borders("grey20", lwd=1.5) + 
+  tm_shape(Community_Boundaries) + tm_borders("grey20", lwd=2) + 
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "white", lty = "dashed", lwd=1.5, legend.show=TRUE)+
+  tm_shape(access_30_parcel_DA_HAM_selected) + tm_borders(col="white", lwd=1.5)+
+  tm_shape(care_dest_HAM_renamed) +
+  tm_dots(col = "Care_Category", palette = c("magenta","#0b0ba1","#007a99", "cyan"), size = 0.01, title ="Care destinations")+
+  tm_compass(position = c("right","top"))+
+  tm_scale_bar(position = c("left","bottom"))+
+  tm_add_legend(type = c("line"), labels = c("Community boundaries", "Escarpment", "Audit DA"), 
+                col=c("black", "grey70", "grey90"), lwd = c(2, 2), lty = c("solid", "dashed"))+
+  tm_layout(bg.color = "grey", legend.outside = TRUE, legend.outside.position = c("right","top"))
+
+p_access_30_selected
+tmap_save(p_access_30_selected, "figures/p_access_30_selected.png")
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, eval=FALSE}
+tmap_mode("plot")
+tm_shape(access_30_parcel_DA_HAM) + tm_fill(col = "quadrant", title = "", breaks = c(1, 2, 3, 4, 5, 6), 
+                                            palette =  c("red", "blue", "lightpink", "skyblue2", "white"),
+                                            labels = c("High-High", "Low-Low", "High-Low",
+           "Low-High", "Non-significant")) +
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "forestgreen", lwd=2)+
+  tm_shape(Community_Boundaries_HAM) + tm_borders(col = "grey20")+
+  tm_legend(text.size = 1)  + tm_borders(alpha = 0.5) +
+  tm_layout(frame = FALSE,  title = "Clusters")  +
+  tm_layout(legend.outside = TRUE)
+
+p_clusted_30_selected <- 
+  tm_shape(ham_bay, bbox=Community_Boundaries) + tm_polygons(col="skyblue", border.alpha = 0) +
+  tm_shape(hydro_p_LakeOntario, bbox=Community_Boundaries) + tm_polygons(col="skyblue", border.alpha = 0)+
+  tm_shape(access_30_parcel_DA_HAM) +
+  tm_fill(col = "quadrant", title = "Spatial autocorrelated\nclusters", 
+            breaks = c(1, 2, 3, 4, 5, 6), 
+            palette =  c("red", "blue", "lightpink", "skyblue2", "white"),
+            labels = c("High-High", "Low-Low", 
+                       "High-Low","Low-High", 
+                       "Non-significant")) +
+  tm_shape(Community_Boundaries_HAM, is.master = TRUE) + tm_borders("grey20", lwd=2) + 
+  tm_shape(Escpartment_Boundary) + tm_lines(col = "orange", lty = "dashed", lwd=2, legend.show=TRUE)+
+  tm_shape(access_30_parcel_DA_HAM_selected) + tm_borders(col="orange", lwd=2)+
+  tm_compass(position = c("right","top"))+
+  tm_scale_bar(position = c("left","bottom"))+
+  tm_add_legend(type = c("line"), labels = c("Community boundaries", "Escarpment", "Audit DA"), 
+                col=c("black", "orange", "orange"), lwd = c(2, 2), lty = c("solid", "dashed"))+
+  tm_layout(bg.color = "grey", legend.outside = TRUE, legend.outside.position = c("right","top"), legend.title.size = 0.9)
+
+p_clusted_30_selected
+tmap_save(p_clusted_30_selected, "figures/p_clusted_30_selected.png")
+  
+```
+
+
 OSM Street network with the posted vehicle speeds within 400m buffers around destinations per DA:
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
@@ -364,6 +494,16 @@ tm_layout(legend.outside = TRUE)
 ```
 
 We see from the map above, the result is quite similar as the Local Moran's I map. Why? I think because positive spatial autocorrelation is quite apparent and what we define as a neighbour is quite similar (i.e., a neighbour for each DAs are the DAs that border it). Is this a good way of defining a neighbourhood? Not sure. We don't have information on what is a good distance away from a DA to be considered within the same neighbourhood (i.e., no surveys of people's perceptions). So once again, stats are complex and shed a some light but leave other things unknown.
+
+
+Now save the access files as shapefiles for use in other GIS software:
+```{r}
+st_write(HAM_census_21, "data/shp-of-care-dest-and-acc/HAM_census_21.shp")
+st_write(care_dest, "data/shp-of-care-dest-and-acc/care_dest.shp")
+
+st_write(access_30_parcel_DA, "data/shp-of-care-dest-and-acc/access_30_parcel_DA.shp")
+st_write(access_15_parcel_DA, "data/shp-of-care-dest-and-acc/access_15_parcel_DA.shp")
+```
 
 
 
